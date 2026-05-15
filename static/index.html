@@ -415,11 +415,11 @@ input { font-family: inherit; outline: none; }
 }
 .card-red { color: #dc2626; }
 .card-black { color: #1f2937; }
+.card-corner { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
 .card-rank { font-size: var(--card-rank); font-weight: 800; line-height: 1; }
-.card-suit { font-size: var(--card-suit); line-height: 1; margin-top: -1px; }
+.card-suit { font-size: var(--card-suit); line-height: 1; margin-top: 1px; }
 .card-center { text-align: center; font-size: var(--card-center); flex: 1; display: flex; align-items: center; justify-content: center; }
-.card-bottom { text-align: right; }
-.card-bottom .card-rank, .card-bottom .card-suit { transform: rotate(180deg); display: inline-block; }
+.card-bottom { align-self: flex-end; position: relative; top: -2px; transform: rotate(180deg); transform-origin: center; }
 
 /* 小牌（对手/历史） */
 .card-small {
@@ -521,10 +521,10 @@ input { font-family: inherit; outline: none; }
   }
   .hand-container {
     --card-w: var(--mobile-hand-card-w, 44px);
-    --card-h: calc(var(--card-w) * 1.43);
-    --card-rank: clamp(8px, calc(var(--card-w) * 0.24), 11px);
-    --card-suit: clamp(6px, calc(var(--card-w) * 0.2), 9px);
-    --card-center: clamp(12px, calc(var(--card-w) * 0.4), 18px);
+    --card-h: calc(var(--card-w) * 1.65);
+    --card-rank: clamp(6px, calc(var(--card-w) * 0.24), 11px);
+    --card-suit: clamp(5px, calc(var(--card-w) * 0.2), 9px);
+    --card-center: clamp(9px, calc(var(--card-w) * 0.4), 18px);
     --mobile-selected-lift: clamp(12px, 4vw, 16px);
     flex-wrap: wrap;
     align-content: flex-end;
@@ -540,7 +540,11 @@ input { font-family: inherit; outline: none; }
     display: none;
   }
   .hand-container .card {
+    padding: clamp(2px, calc(var(--card-w) * 0.08), 4px) clamp(3px, calc(var(--card-w) * 0.1), 5px);
     touch-action: manipulation;
+  }
+  .hand-container .card-suit {
+    margin-top: 0;
   }
   .hand-container .card:hover {
     transform: translateY(-2px);
@@ -1475,15 +1479,15 @@ function renderMyHand() {
     if (isJoker(c.suit)) {
       const isBig = c.rank === 17;
       card.innerHTML = `
-        <div><span class="card-rank" style="color:${isBig ? '#dc2626' : '#1f2937'}">${isBig ? '大' : '小'}</span></div>
+        <div class="card-corner"><span class="card-rank" style="color:${isBig ? '#dc2626' : '#1f2937'}">${isBig ? '大' : '小'}</span></div>
         <div class="card-center" style="color:${isBig ? '#dc2626' : '#1f2937'}; font-weight:900;">王</div>
-        <div class="card-bottom"><span class="card-rank" style="color:${isBig ? '#dc2626' : '#1f2937'}">${isBig ? '大' : '小'}</span></div>
+        <div class="card-corner card-bottom"><span class="card-rank" style="color:${isBig ? '#dc2626' : '#1f2937'}">${isBig ? '大' : '小'}</span></div>
       `;
     } else {
       card.innerHTML = `
-        <div><span class="card-rank">${RANK_DISPLAY[c.rank]}</span><br><span class="card-suit">${SUIT_DISPLAY[c.suit]}</span></div>
+        <div class="card-corner"><span class="card-rank">${RANK_DISPLAY[c.rank]}</span><span class="card-suit">${SUIT_DISPLAY[c.suit]}</span></div>
         <div class="card-center">${SUIT_DISPLAY[c.suit]}</div>
-        <div class="card-bottom"><span class="card-rank">${RANK_DISPLAY[c.rank]}</span><br><span class="card-suit">${SUIT_DISPLAY[c.suit]}</span></div>
+        <div class="card-corner card-bottom"><span class="card-rank">${RANK_DISPLAY[c.rank]}</span><span class="card-suit">${SUIT_DISPLAY[c.suit]}</span></div>
       `;
     }
 
@@ -1496,19 +1500,19 @@ function renderMyHand() {
 function renderCardSmall(c) {
   if (isJoker(c.suit)) {
     const isBig = c.rank === 17;
-    return `<div class="card card-small" style="cursor:default;"><div><span class="card-rank" style="color:${isBig?'#dc2626':'#1f2937'}">${isBig?'大':'小'}</span></div><div class="card-center" style="color:${isBig?'#dc2626':'#1f2937'}; font-weight:900;">王</div></div>`;
+    return `<div class="card card-small" style="cursor:default;"><div class="card-corner"><span class="card-rank" style="color:${isBig?'#dc2626':'#1f2937'}">${isBig?'大':'小'}</span></div><div class="card-center" style="color:${isBig?'#dc2626':'#1f2937'}; font-weight:900;">王</div></div>`;
   }
   const red = isRed(c.suit);
-  return `<div class="card card-small" style="cursor:default;"><div><span class="card-rank" style="color:${red?'#dc2626':'#1f2937'}">${RANK_DISPLAY[c.rank]}</span><span class="card-suit" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</span></div><div class="card-center" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</div></div>`;
+  return `<div class="card card-small" style="cursor:default;"><div class="card-corner"><span class="card-rank" style="color:${red?'#dc2626':'#1f2937'}">${RANK_DISPLAY[c.rank]}</span><span class="card-suit" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</span></div><div class="card-center" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</div></div>`;
 }
 
 function renderCardOpponent(c) {
   if (isJoker(c.suit)) {
     const isBig = c.rank === 17;
-    return `<div class="card card-opponent" style="cursor:default;"><div><span class="card-rank" style="color:${isBig?'#dc2626':'#1f2937'}">${isBig?'大':'小'}</span></div><div class="card-center" style="color:${isBig?'#dc2626':'#1f2937'}; font-weight:900;">王</div></div>`;
+    return `<div class="card card-opponent" style="cursor:default;"><div class="card-corner"><span class="card-rank" style="color:${isBig?'#dc2626':'#1f2937'}">${isBig?'大':'小'}</span></div><div class="card-center" style="color:${isBig?'#dc2626':'#1f2937'}; font-weight:900;">王</div></div>`;
   }
   const red = isRed(c.suit);
-  return `<div class="card card-opponent" style="cursor:default;"><div><span class="card-rank" style="color:${red?'#dc2626':'#1f2937'}">${RANK_DISPLAY[c.rank]}</span><span class="card-suit" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</span></div><div class="card-center" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</div></div>`;
+  return `<div class="card card-opponent" style="cursor:default;"><div class="card-corner"><span class="card-rank" style="color:${red?'#dc2626':'#1f2937'}">${RANK_DISPLAY[c.rank]}</span><span class="card-suit" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</span></div><div class="card-center" style="color:${red?'#dc2626':'#1f2937'}">${SUIT_DISPLAY[c.suit]}</div></div>`;
 }
 
 function toggleCard(id) {
