@@ -350,6 +350,7 @@ input { font-family: inherit; outline: none; }
 .bottom-area {
   background: var(--bar-bg); border-top: 1px solid var(--card-border);
   padding: 8px 12px; backdrop-filter: blur(16px);
+  flex-shrink: 0;
 }
 .my-info {
   display: flex; align-items: center; justify-content: space-between;
@@ -490,8 +491,77 @@ input { font-family: inherit; outline: none; }
     --card-w: 46px; --card-h: 66px; --card-rank: 11px; --card-suit: 9px; --card-center: 18px;
     --card-s-w: 34px; --card-s-h: 48px; --card-s-rank: 9px; --card-s-suit: 7px; --card-s-center: 14px;
   }
+  #game {
+    height: auto;
+    min-height: 100svh;
+  }
+  .top-bar {
+    padding: 6px 8px;
+  }
+  .top-bar-info {
+    gap: 5px;
+  }
+  .opponents {
+    gap: 6px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
   .opponent-panel { min-width: 110px; padding: 8px 10px; }
+  .center-area {
+    flex: 1 1 96px;
+    min-height: 96px;
+    padding: 4px 8px;
+  }
+  .last-play-area {
+    min-height: 88px;
+  }
+  .bottom-area {
+    padding: 8px 8px calc(10px + env(safe-area-inset-bottom));
+  }
+  .hand-container {
+    --card-w: var(--mobile-hand-card-w, 44px);
+    --card-h: calc(var(--card-w) * 1.43);
+    --card-rank: clamp(8px, calc(var(--card-w) * 0.24), 11px);
+    --card-suit: clamp(6px, calc(var(--card-w) * 0.2), 9px);
+    --card-center: clamp(12px, calc(var(--card-w) * 0.4), 18px);
+    --mobile-selected-lift: clamp(12px, 4vw, 16px);
+    flex-wrap: wrap;
+    align-content: flex-end;
+    align-items: flex-end;
+    justify-content: center;
+    gap: calc(var(--mobile-selected-lift) + 10px) var(--mobile-card-gap, 5px);
+    min-height: 0;
+    overflow: visible;
+    padding: calc(var(--mobile-selected-lift) + 8px) 0 12px;
+    -webkit-overflow-scrolling: auto;
+  }
+  .hand-container::-webkit-scrollbar {
+    display: none;
+  }
+  .hand-container .card {
+    touch-action: manipulation;
+  }
+  .hand-container .card:hover {
+    transform: translateY(-2px);
+  }
+  .hand-container .card.selected,
+  .hand-container .card.selected:hover {
+    transform: translateY(calc(-1 * var(--mobile-selected-lift)));
+    z-index: 2;
+  }
+  .action-buttons {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+    position: relative;
+    z-index: 3;
+  }
   .btn-action { padding: 6px 14px; font-size: 13px; }
+  .action-buttons .btn-action {
+    flex: 0 1 30%;
+    min-width: 84px;
+  }
 }
 </style>
 </head>
@@ -904,6 +974,30 @@ function applyCardSize() {
   if (sizeBtn) sizeBtn.textContent = labels[currentCardSize] || '中';
 
   localStorage.setItem('zsy_cardSize', currentCardSize);
+}
+
+function syncResponsiveHandLayout(cardCount) {
+  const hand = document.getElementById('myHand');
+  if (!hand) return;
+
+  const isMobile = window.matchMedia('(max-width: 640px)').matches;
+  if (!isMobile || cardCount === 0) {
+    hand.style.removeProperty('--mobile-hand-card-w');
+    hand.style.removeProperty('--mobile-card-gap');
+    return;
+  }
+
+  const viewport = window.innerWidth || document.documentElement.clientWidth || 375;
+  const availableWidth = Math.max(280, Math.min(hand.clientWidth || viewport - 16, viewport - 16));
+  const targetRows = cardCount <= 10 ? 1 : (cardCount <= 20 ? 2 : 3);
+  const cardsPerRow = Math.max(1, Math.ceil(cardCount / targetRows));
+  const gap = viewport <= 360 ? 4 : 5;
+  const idealWidth = Math.floor((availableWidth - gap * (cardsPerRow - 1)) / cardsPerRow);
+  const minWidth = cardCount > 30 ? 24 : 36;
+  const width = Math.max(minWidth, Math.min(46, idealWidth));
+
+  hand.style.setProperty('--mobile-hand-card-w', width + 'px');
+  hand.style.setProperty('--mobile-card-gap', gap + 'px');
 }
 
 function cycleCardSize() {
@@ -1396,6 +1490,7 @@ function renderMyHand() {
     card.onclick = () => toggleCard(id);
     hand.appendChild(card);
   });
+  syncResponsiveHandLayout(sorted.length);
 }
 
 function renderCardSmall(c) {
@@ -1649,6 +1744,11 @@ document.querySelectorAll('.bg-option').forEach(el => {
 });
 const toggleSoundEl = document.getElementById('toggleSoundEffects');
 if (toggleSoundEl) toggleSoundEl.classList.toggle('on', soundEnabled);
+
+window.addEventListener('resize', () => {
+  const hand = document.getElementById('myHand');
+  syncResponsiveHandLayout(hand ? hand.children.length : 0);
+});
 
 // 生成随机昵称
 const defaultNames = ['风云','星河','惊鸿','逍遥','凌云','飞雪','明辉','晨曦','翠竹','碧海'];
