@@ -424,7 +424,7 @@ async def process_play(room: GameRoom, player_id: str, card_dicts: list[dict]) -
     if not played_set.issubset(hand_set):
         return {'success': False, 'error': '出牌不在手中'}
 
-    # 验证牌型（传入完整手牌以检查炸弹不可拆分规则）
+    # 验证牌型（完整手牌用于按配置检查炸弹拆分规则）
     valid, pattern, error = is_valid_play(
         played_cards, room.last_play, room.is_free_turn,
         hand_cards=player_cards

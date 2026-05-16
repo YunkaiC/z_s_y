@@ -6,7 +6,7 @@
 2. 比较两手牌的大小
 3. 判断出牌是否合法
 4. 炸弹比较的独立配置逻辑
-5. 炸弹不可拆分规则
+5. 炸弹是否可拆分的配置规则
 6. 合法出牌候选的完整枚举
 """
 from collections import Counter
@@ -22,6 +22,8 @@ from constants import (
 # ==================== 炸弹比较配置 ====================
 # 可修改此配置来调整炸弹规则
 BOMB_CONFIG = {
+    # 是否允许把已成炸弹的同点数牌拆开用于单张、对子、三张、顺子等非炸弹牌型
+    'allow_split_bombs': True,
     # 是否允许4张同点数炸弹
     'allow_4_bomb': True,
     # 是否允许5张及以上同点数炸弹（两副牌模式）
@@ -175,7 +177,7 @@ def _is_bomb_size_allowed(size: int) -> bool:
 def _get_bomb_ranks(rank_count: Counter) -> set[Rank]:
     """
     获取所有"炸弹点数"——即拥有min_bomb_size张以上、且至少能组成一种合法炸弹的点数。
-    这些点数的牌受"不可拆分"规则约束：只能作为炸弹使用，不能拆成单/对/三张/带牌。
+    当配置禁止拆炸弹时，候选生成会用这些点数过滤非炸弹牌型。
 
     Args:
         rank_count: 手牌点数统计
@@ -240,7 +242,7 @@ def recognize_pattern(cards: list[Card]) -> Pattern:
     识别一组牌的牌型
 
     这是核心函数，根据出牌的组成判断其属于哪种牌型。
-    注意：此函数只做纯粹的牌型识别，不涉及"炸弹不可拆分"等游戏规则判断。
+    注意：此函数只做纯粹的牌型识别，不涉及炸弹拆分限制等游戏规则判断。
 
     Args:
         cards: 出牌列表
@@ -464,7 +466,7 @@ def is_valid_play(cards: list[Card], last_play: Pattern | None,
         cards: 要出的牌
         last_play: 上一次成功出牌的牌型（None表示自由出牌）
         is_free_turn: 是否为自由出牌轮（新一轮开始）
-        hand_cards: 玩家完整手牌（用于炸弹不可拆分检查）
+        hand_cards: 玩家完整手牌（仅在禁止拆炸弹时用于检查）
 
     Returns:
         (是否合法, 识别出的牌型, 错误信息)
@@ -478,9 +480,9 @@ def is_valid_play(cards: list[Card], last_play: Pattern | None,
     if pattern.hand_type == HandType.INVALID:
         return False, None, "无效的牌型"
 
-    # ---------- 炸弹不可拆分检查 ----------
-    # 如果提供了完整手牌，检查出牌是否违反"炸弹不可拆分"规则
-    if hand_cards is not None:
+    # ---------- 可选：炸弹拆分限制检查 ----------
+    # 默认允许拆炸弹；如果配置为禁止，才阻止炸弹点数参与非炸弹牌型。
+    if not BOMB_CONFIG.get('allow_split_bombs', True) and hand_cards is not None:
         hand_rank_count = _count_ranks(hand_cards)
         bomb_ranks = _get_bomb_ranks(hand_rank_count)
         play_rank_count = _count_ranks(cards)
@@ -598,7 +600,7 @@ def find_all_valid_plays(cards: list[Card], last_play: Pattern | None = None) ->
     找出手牌中所有合法出牌组合
 
     核心规则：
-    - 炸弹不可拆分：4张及以上同点数的牌只能作为炸弹使用
+    - 默认允许拆炸弹；如需禁止，可设置 BOMB_CONFIG['allow_split_bombs'] = False
     - 所有候选牌型必须通过 compare_hands() 验证能压过上家
     - 尽量枚举合理的带牌组合（三带一/三带二/飞机带单/飞机带对）
 
@@ -611,7 +613,10 @@ def find_all_valid_plays(cards: list[Card], last_play: Pattern | None = None) ->
     """
     valid_plays = []
     rank_count = _count_ranks(cards)
-    bomb_ranks = _get_bomb_ranks(rank_count)
+    bomb_ranks = (
+        set() if BOMB_CONFIG.get('allow_split_bombs', True)
+        else _get_bomb_ranks(rank_count)
+    )
 
     if last_play is None:
         _find_free_plays(cards, rank_count, bomb_ranks, valid_plays)
@@ -635,7 +640,7 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
     """
     自由出牌时枚举所有合法牌型
 
-    炸弹不可拆分规则：炸弹点数的牌不参与单张/对子/三张/带牌等非炸弹牌型
+    bomb_ranks 仅在配置禁止拆炸弹时非空；默认允许炸弹点数参与非炸弹牌型。
 
     Args:
         cards: 手牌
@@ -643,14 +648,14 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
         bomb_ranks: 炸弹点数集合
         valid_plays: 输出的合法牌型列表
     """
-    # ========== 单张（排除炸弹点数）==========
+    # ========== 单张 ==========
     for rank in rank_count:
         if rank in bomb_ranks:
             continue
         rank_cards = _get_rank_cards(cards, rank)
         valid_plays.append(Pattern(HandType.SINGLE, rank, cards=[rank_cards[0]]))
 
-    # ========== 对子（排除炸弹点数）==========
+    # ========== 对子 ==========
     for rank, count in rank_count.items():
         if rank in bomb_ranks:
             continue
@@ -658,7 +663,7 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
             pair_cards = _get_rank_cards(cards, rank)[:2]
             valid_plays.append(Pattern(HandType.PAIR, rank, cards=pair_cards))
 
-    # ========== 三张（排除炸弹点数）==========
+    # ========== 三张 ==========
     for rank, count in rank_count.items():
         if rank in bomb_ranks:
             continue
@@ -666,13 +671,13 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
             triple_cards = _get_rank_cards(cards, rank)[:3]
             valid_plays.append(Pattern(HandType.TRIPLE, rank, cards=triple_cards))
 
-    # ========== 三带一（排除炸弹点数，枚举所有带牌）==========
+    # ========== 三带一（枚举所有带牌）==========
     _find_triple_one_plays(cards, rank_count, bomb_ranks, valid_plays, min_rank=None)
 
-    # ========== 三带二（排除炸弹点数，枚举所有带对）==========
+    # ========== 三带二（枚举所有带对）==========
     _find_triple_two_plays(cards, rank_count, bomb_ranks, valid_plays, min_rank=None)
 
-    # ========== 顺子（排除炸弹点数）==========
+    # ========== 顺子 ==========
     single_ranks = sorted([r for r in rank_count if r < Rank.TWO and r not in bomb_ranks])
     consecutive = _find_consecutive(single_ranks, MIN_STRAIGHT_LEN)
     for seq in consecutive:
@@ -684,7 +689,7 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
             length=len(seq), cards=seq_cards
         ))
 
-    # ========== 两连对（2连续对子，如5566，排除炸弹点数）==========
+    # ========== 两连对（2连续对子，如5566）==========
     pair_ranks_for_two = sorted([r for r, c in rank_count.items()
                                   if c >= 2 and r < Rank.TWO and r not in bomb_ranks])
     for i in range(len(pair_ranks_for_two) - 1):
@@ -697,7 +702,7 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
                 length=2, cards=seq_cards
             ))
 
-    # ========== 连对（3对及以上，排除炸弹点数）==========
+    # ========== 连对（3对及以上）==========
     pair_ranks = sorted([r for r, c in rank_count.items()
                           if c >= 2 and r < Rank.TWO and r not in bomb_ranks])
     consecutive = _find_consecutive(pair_ranks, MIN_STRAIGHT_PAIR_LEN)
@@ -710,7 +715,7 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
             length=len(seq), cards=seq_cards
         ))
 
-    # ========== 连三张（排除炸弹点数）==========
+    # ========== 连三张 ==========
     triple_ranks = sorted([r for r, c in rank_count.items()
                             if c >= 3 and r < Rank.TWO and r not in bomb_ranks])
     consecutive = _find_consecutive(triple_ranks, MIN_STRAIGHT_TRIPLE_LEN)
@@ -723,10 +728,10 @@ def _find_free_plays(cards: list[Card], rank_count: Counter,
             length=len(seq), cards=seq_cards
         ))
 
-    # ========== 飞机带单（排除炸弹点数，枚举带牌组合）==========
+    # ========== 飞机带单（枚举带牌组合）==========
     _find_plane_one_plays(cards, rank_count, bomb_ranks, valid_plays, min_rank=None)
 
-    # ========== 飞机带对（排除炸弹点数，枚举带对组合）==========
+    # ========== 飞机带对（枚举带对组合）==========
     _find_plane_two_plays(cards, rank_count, bomb_ranks, valid_plays, min_rank=None)
 
     # ========== 炸弹 ==========
@@ -739,7 +744,7 @@ def _find_follow_plays(cards: list[Card], rank_count: Counter,
     """
     跟牌时枚举所有能压住上家的合法牌型
 
-    炸弹不可拆分规则同样适用。
+    bomb_ranks 仅在配置禁止拆炸弹时非空。
     最终验证由 find_all_valid_plays 中的 compare_hands 检查保证。
 
     Args:
@@ -886,7 +891,7 @@ def _find_triple_one_plays(cards: list[Card], rank_count: Counter,
     """
     生成三带一的所有候选组合
 
-    枚举每个合法三张 + 每个非炸弹点数的带牌。
+    枚举每个合法三张 + 每个可用点数的带牌。
     不再只取第一种带牌方案，而是尽量枚举合理组合。
 
     Args:
@@ -906,7 +911,7 @@ def _find_triple_one_plays(cards: list[Card], rank_count: Counter,
 
         triple_cards = _get_rank_cards(cards, rank)[:3]
 
-        # 枚举所有非炸弹点数、非三张本身点数的单牌
+        # 枚举所有可用点数、非三张本身点数的单牌
         other_ranks = [r for r in rank_count if r != rank and r not in bomb_ranks]
         for kicker_rank in other_ranks:
             kicker_cards = _get_rank_cards(cards, kicker_rank)[:1]
@@ -922,7 +927,7 @@ def _find_triple_two_plays(cards: list[Card], rank_count: Counter,
     """
     生成三带二的所有候选组合
 
-    枚举每个合法三张 + 每个非炸弹点数的对子带牌。
+    枚举每个合法三张 + 每个可用点数的对子带牌。
 
     Args:
         cards: 手牌
@@ -941,7 +946,7 @@ def _find_triple_two_plays(cards: list[Card], rank_count: Counter,
 
         triple_cards = _get_rank_cards(cards, rank)[:3]
 
-        # 枚举所有非炸弹点数、非三张本身点数的对子
+        # 枚举所有可用点数、非三张本身点数的对子
         for other_rank, other_count in rank_count.items():
             if other_rank == rank or other_rank in bomb_ranks:
                 continue
@@ -1007,7 +1012,7 @@ def _find_plane_one_plays(cards: list[Card], rank_count: Counter,
             for r in sub_seq:
                 seq_cards.extend(_get_rank_cards(cards, r)[:3])
 
-            # 找单牌（非炸弹点数、非三张本身点数）
+            # 找单牌（可用点数、非三张本身点数）
             used_ranks = set(sub_seq)
             remaining_ranks = [r for r in rank_count
                                if r not in used_ranks and r not in bomb_ranks]
@@ -1095,7 +1100,7 @@ def _find_plane_two_plays(cards: list[Card], rank_count: Counter,
             for r in sub_seq:
                 seq_cards.extend(_get_rank_cards(cards, r)[:3])
 
-            # 找对子作为带牌（非炸弹点数、非三张本身点数）
+            # 找对子作为带牌（可用点数、非三张本身点数）
             used_ranks = set(sub_seq)
             pair_ranks_remaining = [
                 r for r, c in rank_count.items()
