@@ -366,6 +366,28 @@ input { font-family: inherit; outline: none; }
 }
 .hand-container::-webkit-scrollbar { height: 4px; }
 .hand-container::-webkit-scrollbar-thumb { background: var(--primary-border); border-radius: 2px; }
+.hand-container.is-wrapped {
+  --card-w: var(--wrapped-hand-card-w, 54px);
+  --card-h: calc(var(--card-w) * 1.4);
+  --card-rank: clamp(11px, calc(var(--card-w) * 0.24), 14px);
+  --card-suit: clamp(8px, calc(var(--card-w) * 0.18), 11px);
+  --card-center: clamp(18px, calc(var(--card-w) * 0.36), 24px);
+  --desktop-selected-lift: 18px;
+  flex-wrap: wrap;
+  align-content: flex-end;
+  justify-content: center;
+  gap: calc(var(--desktop-selected-lift) + 14px) var(--wrapped-card-gap, 6px);
+  min-height: 0;
+  overflow: visible;
+  padding: calc(var(--desktop-selected-lift) + 10px) 0 12px;
+  -webkit-overflow-scrolling: auto;
+}
+.hand-container.is-wrapped::-webkit-scrollbar { display: none; }
+.hand-container.is-wrapped .card.selected,
+.hand-container.is-wrapped .card.selected:hover {
+  transform: translateY(calc(-1 * var(--desktop-selected-lift)));
+  z-index: 2;
+}
 
 .action-buttons {
   display: flex; justify-content: center; gap: 10px; margin-top: 6px;
@@ -985,13 +1007,38 @@ function syncResponsiveHandLayout(cardCount) {
   if (!hand) return;
 
   const isMobile = window.matchMedia('(max-width: 640px)').matches;
-  if (!isMobile || cardCount === 0) {
+  hand.classList.remove('is-wrapped');
+  hand.style.removeProperty('--wrapped-hand-card-w');
+  hand.style.removeProperty('--wrapped-card-gap');
+
+  if (cardCount === 0) {
     hand.style.removeProperty('--mobile-hand-card-w');
     hand.style.removeProperty('--mobile-card-gap');
     return;
   }
 
   const viewport = window.innerWidth || document.documentElement.clientWidth || 375;
+
+  if (!isMobile) {
+    hand.style.removeProperty('--mobile-hand-card-w');
+    hand.style.removeProperty('--mobile-card-gap');
+
+    const availableWidth = Math.max(520, Math.min(hand.clientWidth || viewport - 24, viewport - 24));
+    const baseSize = getCardSizeVars();
+    const needsWrap = cardCount * baseSize.w > availableWidth;
+    if (!needsWrap) return;
+
+    const gap = viewport <= 900 ? 5 : 6;
+    const cardsPerRow = Math.max(1, Math.ceil(cardCount / 2));
+    const idealWidth = Math.floor((availableWidth - gap * (cardsPerRow - 1)) / cardsPerRow);
+    const width = Math.max(42, Math.min(baseSize.w, idealWidth));
+
+    hand.classList.add('is-wrapped');
+    hand.style.setProperty('--wrapped-hand-card-w', width + 'px');
+    hand.style.setProperty('--wrapped-card-gap', gap + 'px');
+    return;
+  }
+
   const availableWidth = Math.max(280, Math.min(hand.clientWidth || viewport - 16, viewport - 16));
   const targetRows = cardCount <= 10 ? 1 : (cardCount <= 20 ? 2 : 3);
   const cardsPerRow = Math.max(1, Math.ceil(cardCount / targetRows));

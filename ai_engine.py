@@ -473,7 +473,9 @@ class AIEngine:
 
     def _filter_non_bomb_breaking(self, plays: list[Pattern],
                                   cards: list[Card]) -> list[Pattern]:
-        """过滤掉会拆炸弹的出牌"""
+        """按配置过滤掉会拆炸弹的出牌"""
+        if BOMB_CONFIG.get('allow_split_bombs', True):
+            return plays
         rank_count = _count_ranks(cards)
         bomb_ranks = _get_bomb_ranks(rank_count)
         if not bomb_ranks:
@@ -621,7 +623,7 @@ class AIEngine:
         评估因素：
         1. 出牌张数（越多越好，减少手牌）
         2. 是否拆对子/三张/顺子/连对等良好结构
-        3. 是否拆炸弹
+        3. 是否拆炸弹（允许拆，但会按局势给轻微结构惩罚）
         4. 出牌后孤张数量
         5. 自身剩余牌数
         6. 对手剩余牌数
@@ -686,10 +688,10 @@ class AIEngine:
         for rank, play_count in play_rc.items():
             hand_count = my_rc.get(rank, 0)
             if hand_count >= 4 and play_count < hand_count:
-                # 从4+张中取部分，可能涉及拆炸弹（但find_all_valid_plays已过滤）
-                # 这里作为额外惩罚
+                # 允许拆炸弹，但保留一点结构惩罚，让MC胜率来决定是否值得。
                 if candidate.hand_type not in (HandType.BOMB, HandType.ROCKET):
-                    score -= 3.0  # 严重惩罚
+                    split_penalty = 0.8 if BOMB_CONFIG.get('allow_split_bombs', True) else 3.0
+                    score -= split_penalty
             elif hand_count == 3 and play_count == 1:
                 # 从三张中取一张，破坏三张结构
                 score -= 1.5
@@ -1150,7 +1152,10 @@ class AIEngine:
             return [], None, True
 
         rank_count = _count_ranks(cards)
-        bomb_ranks = _get_bomb_ranks(rank_count)
+        bomb_ranks = (
+            set() if BOMB_CONFIG.get('allow_split_bombs', True)
+            else _get_bomb_ranks(rank_count)
+        )
 
         if is_free_turn or last_play is None:
             # ---- 自由出牌：寻找最简单的出牌 ----
